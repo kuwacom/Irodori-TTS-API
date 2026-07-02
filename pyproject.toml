@@ -1,0 +1,85 @@
+[project]
+name = "irodori-tts-api"
+version = "1.0.0"
+description = "Irodori TTS RESTful API"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.124.0",
+    "irodori-tts @ git+https://github.com/kuwacom/Irodori-TTS-Optimiz",
+    "pydantic-settings>=2.12.0",
+    "python-multipart>=0.0.20",
+    "rich>=14.0.0",
+    "soundfile>=0.12.0",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[project.optional-dependencies]
+legacy-cuda = ["torch==2.5.1", "torchaudio==2.5.1"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=9.0.0",
+    "pytest-asyncio>=0.25.0",
+    "ruff>=0.14.0",
+    "taskipy>=1.14.0",
+]
+current-cuda = ["torch>=2.10.0", "torchaudio>=2.10.0"]
+
+[tool.uv]
+package = false
+default-groups = ["current-cuda"]
+conflicts = [[{ group = "current-cuda" }, { extra = "legacy-cuda" }]]
+
+[tool.uv.sources]
+irodori-tts = { git = "https://github.com/kuwacom/Irodori-TTS-Optimiz" }
+torch = [
+    { index = "pytorch-cu118", extra = "legacy-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu128", group = "current-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchaudio = [
+    { index = "pytorch-cu118", extra = "legacy-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { index = "pytorch-cu128", group = "current-cuda", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+exclude = [
+    ".venv",
+    ".uv-cache",
+    ".uv-python",
+    ".pytest_cache",
+    "pytest-cache-files-*",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.taskipy.tasks]
+dev = "python -m src.main"
+start = "python -m src.main"
+test = "pytest"
+lint = "ruff check ."
+format = "ruff format ."
+fix = "ruff check . --fix"
+check = "ruff check . && pytest"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test*.py"]
+addopts = "-p no:cacheprovider"
+asyncio_mode = "auto"

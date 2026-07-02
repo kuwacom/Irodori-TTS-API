@@ -1,0 +1,426 @@
+# Irodori TTS API
+
+
+[Irodori-TTS-Optimiz](https://github.com/kuwacom/Irodori-TTS-Optimiz) を依存バックエンドにした RESTful 音声合成 APIサーバー
+
+
+## 必要条件
+
+- Python 3.12+
+- NVIDIA GPU（Compute Capability 7.5以上推奨）
+- [uv](https://docs.astral.sh/uv/) パッケージマネージャー
+- CMake 3.5+（sentencepieceビルド用）
+
+## セットアップ
+
+```bash
+git clone https://github.com/kuwacom/Irodori-TTS-API.git
+cd Irodori-TTS-API
+
+cp .env.example .env
+# .env を編集（モデル・デバイス等）
+
+uv sync
+```
+
+初回の `uv sync` では PyTorch CUDA版とIrodori-TTSモデル（約1.2GB）をダウンロードするため時間がかかります。
+
+## 起動
+
+```bash
+uv run task start
+```
+
+開発モード（ホットリロード）:
+
+```bash
+uv run task dev
+```
+
+## コマンド一覧
+
+`uv run task <name>` で実行できます。
+
+| コマンド | 説明 |
+|---|---|
+| `start` | サーバー起動 |
+| `dev` | 開発サーバー起動 |
+| `test` | テスト実行 |
+| `lint` | Ruff lintチェック |
+| `format` | Ruffフォーマット |
+| `fix` | Ruff自動修正 |
+| `check` | lint + テスト |
+
+## 環境変数
+
+`.env` ファイルで設定します。`.env.example` をコピーして編集してください。
+
+### アプリケーション
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `HOST` | `127.0.0.1` | バインドアドレス |
+| `PORT` | `8000` | ポート番号 |
+| `RELOAD` | `false` | ホットリロード（開発用） |
+| `LOG_LEVEL` | `INFO` | ログレベル |
+| `CORS_POLICY_ORIGIN` | `*` | CORS許可オリジン（カンマ区切り） |
+
+### モデル
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `DEFAULT_MODEL` | `Aratako/Irodori-TTS-600M-v3-VoiceDesign` | デフォルトのTTSモデル |
+| `CODEC_REPO` | `Aratako/Semantic-DACVAE-Japanese-32dim` | DACVAEコーデックリポジトリ |
+| `MODEL_DEVICE` | `cuda` | モデル配置デバイス |
+| `CODEC_DEVICE` | `cpu` | コーデック配置デバイス |
+| `MODEL_PRECISION` | `fp32` | モデル精度（`fp32` / `fp16` / `bf16`） |
+| `CUDA_VISIBLE_DEVICES` | (空) | PyTorchが認識するGPUを制限 |
+
+### ディレクトリ
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `MODELS_DIR` | `models` | HuggingFace Hubキャッシュ |
+| `DATA_DIR` | `data` | 話者データ |
+
+### 制限値
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `MAX_REF_SECONDS` | `30.0` | 参照音声の最大秒数 |
+| `MAX_GENERATE_SECONDS` | `30.0` | 生成音声の最大秒数 |
+| `MAX_NUM_CANDIDATES` | `4` | 候補数の上限 |
+| `MAX_REQUEST_BODY_SIZE` | `33554432` | リクエストボディ最大サイズ（バイト） |
+
+### GPUに関する注意点
+
+**マルチGPU構成**
+
+モデルとコーデックを別々のGPUに配置できます。
+
+```env
+MODEL_DEVICE=cuda:0
+CODEC_DEVICE=cuda:1
+```
+
+**非対応GPUの除外**
+
+Compute Capability 7.5未満のGPU（GTX 10xx等）が接続されている環境では、
+cuDNNの初期化に失敗するため `CUDA_VISIBLE_DEVICES` でPyTorchの視界から除外する必要があります。
+
+```env
+CUDA_VISIBLE_DEVICES=0
+MODEL_DEVICE=cuda:0
+CODEC_DEVICE=cuda:0
+```
+
+`.env` に書いた `CUDA_VISIBLE_DEVICES` は起動時にOS環境変数へ反映されるため、
+PyTorchより前に確実に効きます。
+
+**CPU動作**
+
+GPUがない・非対応GPUのみの環境ではCPU動作も可能ですが、推論速度は大幅に低下します。
+
+```env
+MODEL_DEVICE=cpu
+CODEC_DEVICE=cpu
+```
+
+## エンドポイント
+
+### 話者管理
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| `POST` | `/v1/speakers` | 話者登録 |
+| `GET` | `/v1/speakers` | 話者一覧 |
+| `GET` | `/v1/speakers/{speakerId}` | 話者詳細 |
+| `DELETE` | `/v1/speakers/{speakerId}` | 話者削除 |
+
+### 音声合成
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| `POST` | `/v1/synthesize` | 音声合成 |
+
+---
+
+### POST /v1/speakers
+
+話者を登録する。音声ファイルからlatentを抽出し、以降の合成で参照できるようにする。
+
+**Content-Type:** `multipart/form-data`
+
+| フィールド | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `audio` | file | ○ | 音声ファイル（wav/mp3/flac） |
+| `metadata` | string(JSON) | ○ | 話者メタデータ |
+
+**metadata:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `name` | string | `""` | 話者名 |
+| `description` | string | `""` | 説明 |
+| `maxRefSeconds` | number | `30.0` | 参照音声の最大秒数 |
+| `normalizeDb` | number | `-16.0` | 正規化目標 dB |
+| `ensureMax` | boolean | `true` | 正規化後にピーククリップ |
+
+```bash
+curl -X POST http://localhost:8000/v1/speakers \
+  -F "audio=@voice.wav" \
+  -F 'metadata={"name":"female","description":"ナレーション向け"}'
+```
+
+```json
+{
+  "speakerId": "a1b2c3d4-...",
+  "name": "female",
+  "status": "created",
+  "sha256": "a6f2...",
+  "createdAt": "2026-06-25T10:00:00Z"
+}
+```
+
+同一音声・同一条件の話者が既に存在する場合は `status: "already exists"` で既存IDを返します。
+
+---
+
+### GET /v1/speakers
+
+登録済み話者の一覧を返す。
+
+```json
+[
+  {
+    "speakerId": "a1b2c3d4-...",
+    "name": "female",
+    "createdAt": "2026-06-25T10:00:00Z",
+    "lastUsedAt": null
+  }
+]
+```
+
+---
+
+### GET /v1/speakers/{speakerId}
+
+話者の詳細情報を返す。
+
+```json
+{
+  "speakerId": "a1b2c3d4-...",
+  "name": "female",
+  "description": "ナレーション向け",
+  "sha256": "a6f2...",
+  "maxRefSeconds": 30.0,
+  "normalizeDb": -16.0,
+  "ensureMax": true,
+  "codecRepo": "Aratako/Semantic-DACVAE-Japanese-32dim",
+  "createdAt": "2026-06-25T10:00:00Z",
+  "updatedAt": "2026-06-25T10:00:00Z",
+  "lastUsedAt": null
+}
+```
+
+---
+
+### DELETE /v1/speakers/{speakerId}
+
+話者を削除する。latentファイルも同時に削除される。
+
+```json
+{
+  "speakerId": "a1b2c3d4-...",
+  "deleted": true
+}
+```
+
+---
+
+### POST /v1/synthesize
+
+音声合成を実行する。以下の4パターンをサポート:
+
+| パターン | speakerId | caption | 動作 |
+|---|---|---|---|
+| Reference | ○ | -- | 参照音声から話者を再現 |
+| VoiceDesign | -- | ○ | キャプションでスタイルを指定 |
+| Hybrid | ○ | ○ | 参照音声 + キャプション |
+| Text-only | -- | -- | テキストのみ |
+
+**Content-Type:** `application/json`
+
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|---|---|---|---|---|
+| `text` | string | ○ | -- | 読み上げ本文 |
+| `speakerId` | string | | `null` | 話者ID |
+| `caption` | string | | `null` | スタイル指示 |
+| `model` | object | | 下表 | モデル指定 |
+| `sampling` | object | | 下表 | サンプリング設定 |
+| `duration` | object | | 下表 | 音声長制御 |
+| `guidance` | object | | 下表 | ガイダンス設定 |
+| `truncation` | object | | 下表 | 拡散サンプリングの数値的補正 |
+| `kvCache` | object | | 下表 | KVキャッシュ関連の挙動 |
+| `tailTrim` | object | | 下表 | 末尾の無音トリム |
+| `decode` | object | | 下表 | デコード方式 |
+| `tokenLimits` | object | | 下表 | トークン長制限 |
+| `output` | object | | 下表 | 出力設定 |
+
+**model:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `name` | string/null | `null` | モデル名（null=サーバ設定値） |
+| `loraAdapter` | string/null | `null` | LoRAアダプタ名（null=使用しない） |
+
+**sampling:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `preset` | string | `"custom"` | `balanced` / `quality` / `speed` / `extreme` / `custom` |
+| `numSteps` | int | `40` | 拡散ステップ数 |
+| `numCandidates` | int | `1` | 候補数（最大4） |
+| `seed` | int/null | `null` | 乱数シード |
+| `tScheduleMode` | string | `"linear"` | tスケジュールモード (linear / sigmoid) |
+| `swayCoeff` | float | `-1.0` | sway coefficient |
+
+**duration:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `seconds` | float/null | `null` | 生成秒数。nullならモデル内蔵のduration predictorが自動予測 |
+| `durationScale` | float | `1.0` | duration predictorの出力倍率 |
+| `minSeconds` | float | `0.5` | 生成秒数の下限 |
+
+**guidance:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `mode` | string | `"independent"` | CFGガイダンスモード (independent / joint) |
+| `cfgScale` | float/null | `null` | 全CFGスケールを一括指定（null=個別設定を使用） |
+| `cfgScaleText` | float | `3.0` | テキストCFG |
+| `cfgScaleCaption` | float | `3.0` | キャプションCFG |
+| `cfgScaleSpeaker` | float | `5.0` | スピーカーCFG |
+| `cfgMinT` | float | `0.5` | CFGが有効になるtの下限 |
+| `cfgMaxT` | float | `1.0` | CFGが有効になるtの上限 |
+
+**truncation:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `factor` | float/null | `null` | truncation factor（null=無効） |
+| `rescaleK` | float/null | `null` | rescale k（null=無効） |
+| `rescaleSigma` | float/null | `null` | rescale sigma（null=無効） |
+
+**kvCache:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `contextKvCache` | bool | `true` | context KVキャッシュを使用 |
+| `speakerKvScale` | float/null | `null` | speaker KVスケール（null=無効） |
+| `speakerKvMinT` | float/null | `null` | speaker KVが有効になるtの下限 |
+| `speakerKvMaxLayers` | int/null | `null` | speaker KVが適用されるレイヤー数上限 |
+| `speakerUncondMode` | string | `"mask"` | speaker無条件時のモード (mask / zero) |
+
+**tailTrim:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `trimTail` | bool | `true` | 末尾の無音をトリム |
+| `tailWindowSize` | int | `20` | 末尾トリムの窓サイズ |
+| `tailStdThreshold` | float | `0.05` | 末尾トリムの標準偏差しきい値 |
+| `tailMeanThreshold` | float | `0.1` | 末尾トリムの平均しきい値 |
+
+**decode:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `mode` | string | `"sequential"` | デコード方式 (sequential / batch) |
+
+**tokenLimits:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `maxTextLen` | int/null | `null` | テキスト最大トークン長（null=モデル上限） |
+| `maxCaptionLen` | int/null | `null` | キャプション最大トークン長（null=モデル上限） |
+
+**output:**
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `format` | string | `"wav"` | 出力形式 |
+| `mode` | string | `"buffer"` | `buffer`: 音声を直接返す / `inline`: base64でJSONに埋め込む |
+
+**VoiceDesign + bufferモードの例:**
+
+```bash
+curl -X POST http://localhost:8000/v1/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"こんにちは！","caption":"元気な幼女"}' \
+  --output voice.wav
+```
+
+**話者参照 + inlineモードの例:**
+
+```bash
+curl -X POST http://localhost:8000/v1/synthesize \
+  -H "Content-Type: application/json" \
+  -d '{"text":"今日はいい天気ですね。","speakerId":"a1b2c3d4-...","output":{"mode":"inline"}}'
+```
+
+**bufferモードのレスポンス:** 音声データをそのまま返します（`Content-Type: audio/wav`）
+
+以下のレスポンスヘッダを含みます:
+
+| ヘッダ | 説明 |
+|---|---|
+| `X-Request-Id` | リクエストID（UUID） |
+| `X-Sample-Rate` | サンプリングレート |
+| `X-Seed` | 使用したシード値 |
+
+**inlineモードのレスポンス:**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "succeeded",
+  "model": {
+    "checkpoint": "Aratako/Irodori-TTS-600M-v3-VoiceDesign"
+  },
+  "conditioning": {
+    "speakerId": "a1b2c3d4-...",
+    "caption": null,
+    "mode": "speaker"
+  },
+  "audios": [
+    {
+      "index": 0,
+      "contents": "UklGRiQAAABXQVZF...",
+      "mimeType": "audio/wav",
+      "sampleRate": 48000,
+      "duration": 3.42
+    }
+  ],
+  "seed": 123456789,
+  "timings": {
+    "totalToDecodeMs": 9051.4
+  },
+  "messages": []
+}
+```
+
+`id` はリクエストごとに UUID で生成され、ログにも `req_id` として出力されます。すべてのレスポンスヘッダに `X-Request-Id` として付与されます。
+
+## ディレクトリ構造
+
+```
+src/configs/      -- 環境変数設定
+src/lib/          -- 共通エラー定義
+src/middleware/    -- ロギング・エラーハンドラ
+src/routes/v1/    -- APIエンドポイント（speakers, synthesize）
+src/schemas/      -- Pydanticリクエスト/レスポンスモデル
+src/services/     -- 話者ストア・TTSランタイム管理
+data/             -- speakers.json + latents/*.pt（実行時に生成）
+models/           -- HuggingFace Hubキャッシュ（自動生成）
+```

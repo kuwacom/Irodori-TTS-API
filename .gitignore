@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.uv-cache/
+.uv-python/
+
+# Tools
+.pytest_cache/
+.ruff_cache/
+pytest-cache-files-*
+
+# Environment
+.env
+
+# Runtime data
+data/
+
+# Model cache
+models/
