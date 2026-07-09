@@ -42,6 +42,10 @@ class Env(BaseSettings):
     # lib 側もデフォルト OFF だが明示的に制御可能とするため環境変数化する
     enable_watermark: bool = Field(default=False, alias="ENABLE_WATERMARK")
 
+    # 長文分割推論で1バッチあたりに同時処理するセグメント最大数の上限
+    # リクエスト側で maxBatchSegments を指定してもこの値を超えることはできない
+    max_batch_segments: int = Field(default=8, alias="MAX_BATCH_SEGMENTS")
+
     # PyTorch が認識するGPUを制限する（マルチGPU環境でCC非対応GPUを除外する等）
     cuda_visible_devices: str = Field(
         default="",

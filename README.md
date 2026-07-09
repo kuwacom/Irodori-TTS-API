@@ -82,6 +82,7 @@ uv run task dev
 |---|---|---|
 | `MAX_PARALLELISM` | `1` | GPU上の同時推論スロット数（1=直列、2以上=並列推論）。VRAM容量に応じて調整 |
 | `ENABLE_WATERMARK` | `false` | SilentCipherウォーターマーク（trueで有効化） |
+| `MAX_BATCH_SEGMENTS` | `8` | 長文分割推論で1バッチあたりに同時処理するセグメント最大数の上限。リクエスト側の `maxBatchSegments` はこの値を超えられない |
 
 **VRAM容量と精度・並列度の目安**
 
@@ -286,6 +287,7 @@ curl -X POST http://localhost:8000/v1/speakers \
 | `decode` | object | | 下表 | デコード方式 |
 | `tokenLimits` | object | | 下表 | トークン長制限 |
 | `output` | object | | 下表 | 出力設定 |
+| `longText` | object/null | `null` | 長文分割設定（下表）。指定時はテキストを自動分割してセグメントごとに推論・結合する |
 
 **model:**
 
@@ -371,6 +373,37 @@ curl -X POST http://localhost:8000/v1/speakers \
 |---|---|---|---|
 | `format` | string | `"wav"` | 出力形式 |
 | `mode` | string | `"buffer"` | `buffer`: 音声を直接返す / `inline`: base64でJSONに埋め込む |
+
+**longText:**
+
+指定時は長文モードが有効になり、テキストが句読点等で自動分割され、各セグメントを個別推論したのち前後無音トリムと無音区間挿入で結合される。sampling, guidance, kvCache, tailTrim 等の全パラメータはそのまま利用可能。
+
+`durationScale` が 1.0 を前提とした場合のパラメータ感:
+
+- `30 / 180 / 0.2`（デフォルト）: 各セグメントを個別に作ってつなげたのと等しい、最も自然な結果になる
+- `30 / 200 / 0.2`: 少々早めの読み上げで、詰め込み気味のthe読み上げ感が出る
+- `28 / 200 / 0.2`: セグション時間が足りていない感じになり、不自然になりやすい
+
+キャラクターごとのおすすめ設定:
+
+- **ゆっくり話すキャラ**: `maxSegmentChars: 150`, `segmentGapSeconds: 0.3`
+- **標準的なキャラ**: デフォルト値（`180`, `0.2`）そのままでOK
+- **早口・元気なキャラ**: `maxSegmentChars: 200`, `segmentGapSeconds: 0.15`
+- **落ち着いたナレーション**: `maxSegmentSeconds: 30`, `maxSegmentChars: 160`, `segmentGapSeconds: 0.25`
+
+上記はあくまで目安であり、実際のキャラクター特性やテキスト内容によって調整が必要な場合がある。
+
+| キー | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `maxSegmentSeconds` | float | `30.0` | 1セグメントあたりの最大推定秒数 |
+| `maxSegmentChars` | int | `180` | 1セグメントの最大文字数 |
+| `charsPerSecond` | float | `10.0` | 1秒あたりの発話文字数推定値 |
+| `minSegmentChars` | int | `4` | セグメント最小文字数（これ以下は前セグメントへ結合） |
+| `segmentGapSeconds` | float | `0.2` | セグメント間無音区間（秒） |
+| `segmentTrimSilenceDb` | float | `-40.0` | セグメント前後無音トリム閾値 (dB) |
+| `maxBatchSegments` | int | `8` | 1バッチで同時処理するセグメント最大数。サーバ設定 (`MAX_BATCH_SEGMENTS`) を超える場合は上限にクランプされる |
+
+inline レスポンスには `segments` 配列が含まれる。buffer モードでは `X-Segments` ヘッダーにセグメント数が入る。
 
 **VoiceDesign + bufferモードの例:**
 

@@ -32,7 +32,7 @@ class SamplingParams(BaseModel):
     seed: int | None = Field(default=None, description="乱数シード")
     tScheduleMode: str = Field(
         default="linear",
-        description="tスケジュールモード (linear / sigmoid)",
+        description="tスケジュールモード (linear / sway)",
     )
     swayCoeff: float = Field(default=-1.0, description="sway coefficient")
 
@@ -62,7 +62,7 @@ class GuidanceParams(BaseModel):
 
     mode: str = Field(
         default="independent",
-        description="cfg ガイダンスモード (independent / joint)",
+        description="cfg ガイダンスモード (independent / joint / alternating)",
     )
     cfgScale: float | None = Field(
         default=None,
@@ -196,6 +196,48 @@ class OutputParams(BaseModel):
     )
 
 
+class LongTextParams(BaseModel):
+    """長文分割読み上げの設定
+
+    指定時はテキストを自動分割し、各セグメントを個別に推論して結合する。
+    未指定時は従来通り単一推論で処理する。
+    """
+
+    maxSegmentSeconds: float = Field(
+        default=30.0, gt=0,
+        description="1セグメントあたりの最大推定秒数",
+    )
+    maxSegmentChars: int = Field(
+        default=180, ge=1,
+        description="1セグメントの最大文字数",
+    )
+    charsPerSecond: float = Field(
+        default=10.0, gt=0,
+        description="1秒あたりの発話文字数推定値",
+    )
+    minSegmentChars: int = Field(
+        default=4, ge=1,
+        description=(
+            "セグメントの最小文字数（これ以下は前セグメントへ結合）"
+        ),
+    )
+    segmentGapSeconds: float = Field(
+        default=0.2, ge=0,
+        description="セグメント間の無音区間（秒）",
+    )
+    segmentTrimSilenceDb: float = Field(
+        default=-40.0,
+        description="セグメント前後無音トリム閾値（dB）",
+    )
+    maxBatchSegments: int = Field(
+        default=8, ge=1,
+        description=(
+            "1バッチで同時処理するセグメント最大数"
+            "（サーバ設定の MAX_BATCH_SEGMENTS が上限）"
+        ),
+    )
+
+
 class SynthesizeRequest(BaseModel):
     """POST /v1/synthesize のリクエストボディ"""
 
@@ -212,6 +254,13 @@ class SynthesizeRequest(BaseModel):
     decode: DecodeParams = Field(default_factory=DecodeParams)
     tokenLimits: TokenLimitsParams = Field(default_factory=TokenLimitsParams)
     output: OutputParams = Field(default_factory=OutputParams)
+    longText: LongTextParams | None = Field(
+        default=None,
+        description=(
+            "長文分割設定。指定時は synthesize_long へ切り替わり、"
+            "テキストを自動分割して複数セグメントを生成・結合する"
+        ),
+    )
 
 
 class AudioItem(BaseModel):
@@ -238,6 +287,14 @@ class ConditioningInfo(BaseModel):
     mode: str
 
 
+class SegmentInfo(BaseModel):
+    """長文分割時の各セグメント情報"""
+
+    index: int
+    text: str
+    estimatedSeconds: float
+
+
 class SynthesizeResponse(BaseModel):
     """POST /v1/synthesize のレスポンス"""
 
@@ -249,3 +306,4 @@ class SynthesizeResponse(BaseModel):
     seed: int
     timings: dict[str, Any] = Field(default_factory=dict)
     messages: list[str] = Field(default_factory=list)
+    segments: list[SegmentInfo] | None = None
