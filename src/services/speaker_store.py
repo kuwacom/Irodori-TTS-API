@@ -111,6 +111,7 @@ def register_speaker(
     audio_sha256: str,
     name: str,
     description: str,
+    caption: str | None,
     max_ref_seconds: float,
     normalize_db: float,
     ensure_max: bool,
@@ -129,6 +130,7 @@ def register_speaker(
     _SPEAKERS[speaker_id] = {
         "name": name,
         "description": description,
+        "caption": caption,
         "sha256": audio_sha256,
         "maxRefSeconds": max_ref_seconds,
         "normalizeDb": normalize_db,

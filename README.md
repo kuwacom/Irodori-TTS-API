@@ -162,6 +162,7 @@ CODEC_DEVICE=cpu
 |---|---|---|---|
 | `name` | string | `""` | 話者名 |
 | `description` | string | `""` | 説明 |
+| `caption` | string/null | `null` | 合成時のデフォルトキャプション（スタイル指示） |
 | `maxRefSeconds` | number | `30.0` | 参照音声の最大秒数 |
 | `normalizeDb` | number | `-16.0` | 正規化目標 dB |
 | `ensureMax` | boolean | `true` | 正規化後にピーククリップ |
@@ -212,6 +213,7 @@ curl -X POST http://localhost:8000/v1/speakers \
   "speakerId": "a1b2c3d4-...",
   "name": "female",
   "description": "ナレーション向け",
+  "caption": null,
   "sha256": "a6f2...",
   "maxRefSeconds": 30.0,
   "normalizeDb": -16.0,
@@ -255,7 +257,7 @@ curl -X POST http://localhost:8000/v1/speakers \
 |---|---|---|---|---|
 | `text` | string | ○ | -- | 読み上げ本文 |
 | `speakerId` | string | | `null` | 話者ID |
-| `caption` | string | | `null` | スタイル指示 |
+| `caption` | string | | `null` | スタイル指示。speakerId に caption が設定されている場合はリクエストの caption が優先され、未指定時は speaker の caption が使われる |
 | `model` | object | | 下表 | モデル指定 |
 | `sampling` | object | | 下表 | サンプリング設定 |
 | `duration` | object | | 下表 | 音声長制御 |

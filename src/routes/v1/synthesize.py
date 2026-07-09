@@ -99,6 +99,11 @@ async def synthesize(
             )
         ref_latent_path = speaker_store.latent_path_for(req.speakerId)
 
+    # リクエストの caption があれば優先、無ければ speaker の caption を使う
+    effective_caption = req.caption
+    if effective_caption is None and speaker_data is not None:
+        effective_caption = speaker_data.get("caption")
+
     # 起動時に初期化済みのランタイムを取得
     runtime = get_runtime()
     checkpoint = env.default_model
@@ -115,7 +120,7 @@ async def synthesize(
 
     sampling_req = SamplingRequest(
         text=req.text,
-        caption=req.caption,
+        caption=effective_caption,
         ref_latent=ref_latent_path,
         no_ref=no_ref,
         ref_normalize_db=norm_db,
@@ -211,7 +216,7 @@ async def synthesize(
     for name, elapsed in result.stage_timings:
         timings[f"{name}Ms"] = round(elapsed * 1000, 1)
 
-    mode = _determine_conditioning_mode(req.speakerId, req.caption)
+    mode = _determine_conditioning_mode(req.speakerId, effective_caption)
 
     return SynthesizeResponse(
         id=request_id,
@@ -219,7 +224,7 @@ async def synthesize(
         model=ModelInfo(checkpoint=checkpoint),
         conditioning=ConditioningInfo(
             speakerId=req.speakerId,
-            caption=req.caption,
+            caption=effective_caption,
             mode=mode,
         ),
         audios=audios,

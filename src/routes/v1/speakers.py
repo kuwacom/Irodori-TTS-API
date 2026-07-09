@@ -110,6 +110,7 @@ async def create_speaker(
         audio_sha256=audio_sha256,
         name=parsed.name,
         description=parsed.description,
+        caption=parsed.caption,
         max_ref_seconds=parsed.maxRefSeconds,
         normalize_db=parsed.normalizeDb,
         ensure_max=parsed.ensureMax,
