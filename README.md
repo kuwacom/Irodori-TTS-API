@@ -73,8 +73,26 @@ uv run task dev
 | `CODEC_REPO` | `Aratako/Semantic-DACVAE-Japanese-32dim` | DACVAEコーデックリポジトリ |
 | `MODEL_DEVICE` | `cuda` | モデル配置デバイス |
 | `CODEC_DEVICE` | `cpu` | コーデック配置デバイス |
-| `MODEL_PRECISION` | `fp32` | モデル精度（`fp32` / `fp16` / `bf16`） |
+| `MODEL_PRECISION` | `fp32` | モデル精度（`fp32` / `bf16`） |
 | `CUDA_VISIBLE_DEVICES` | (空) | PyTorchが認識するGPUを制限 |
+
+### 推論制御
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `MAX_PARALLELISM` | `1` | GPU上の同時推論スロット数（1=直列、2以上=並列推論）。VRAM容量に応じて調整 |
+| `ENABLE_WATERMARK` | `false` | SilentCipherウォーターマーク（trueで有効化） |
+
+**VRAM容量と精度・並列度の目安**
+
+`MAX_PARALLELISM` はGPUのVRAM容量と`MODEL_PRECISION`の組み合わせで調整が必要です。
+以下は目安であり、実際のテキスト長や生成秒数によって変動します。
+
+| VRAM | 精度 | 推奨 `MAX_PARALLELISM` |
+|---|---|---|
+| 12GB | `fp32` | 1（並列は厳しい） |
+| 12GB | `bf16` | 2（ギリギリ） |
+| 24GB | `fp32` | 4〜5 |
 
 ### ディレクトリ
 
@@ -284,7 +302,7 @@ curl -X POST http://localhost:8000/v1/speakers \
 | `numSteps` | int | `40` | 拡散ステップ数 |
 | `numCandidates` | int | `1` | 候補数（最大4） |
 | `seed` | int/null | `null` | 乱数シード |
-| `tScheduleMode` | string | `"linear"` | tスケジュールモード (linear / sigmoid) |
+| `tScheduleMode` | string | `"linear"` | tスケジュールモード (linear / sway) |
 | `swayCoeff` | float | `-1.0` | sway coefficient |
 
 **duration:**
@@ -299,7 +317,7 @@ curl -X POST http://localhost:8000/v1/speakers \
 
 | キー | 型 | デフォルト | 説明 |
 |---|---|---|---|
-| `mode` | string | `"independent"` | CFGガイダンスモード (independent / joint) |
+| `mode` | string | `"independent"` | CFGガイダンスモード (independent / joint / alternating) |
 | `cfgScale` | float/null | `null` | 全CFGスケールを一括指定（null=個別設定を使用） |
 | `cfgScaleText` | float | `3.0` | テキストCFG |
 | `cfgScaleCaption` | float | `3.0` | キャプションCFG |

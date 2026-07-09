@@ -33,6 +33,15 @@ class Env(BaseSettings):
         description="Hugging Face Hub のキャッシュディレクトリ",
     )
 
+    # GPU 上の同時推論スロット数
+    # InferenceRuntime 側で Semaphore および CUDA Stream プールとして管理され、
+    # 複数リクエストが異なる Stream 上で並列に推論を実行できるようになる
+    max_parallelism: int = Field(default=1, alias="MAX_PARALLELISM")
+
+    # SilentCipher ウォーターマーク有無。
+    # lib 側もデフォルト OFF だが明示的に制御可能とするため環境変数化する
+    enable_watermark: bool = Field(default=False, alias="ENABLE_WATERMARK")
+
     # PyTorch が認識するGPUを制限する（マルチGPU環境でCC非対応GPUを除外する等）
     cuda_visible_devices: str = Field(
         default="",

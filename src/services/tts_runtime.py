@@ -49,6 +49,7 @@ def _build_key(checkpoint: str | None = None) -> RuntimeKey:
         codec_repo=env.codec_repo,
         model_precision=env.model_precision,
         codec_device=env.codec_device,
+        enable_watermark=env.enable_watermark,
     )
 
 
@@ -60,9 +61,14 @@ def init_runtime(checkpoint: str | None = None) -> InferenceRuntime:
     resolved_checkpoint = _resolve_checkpoint(raw_checkpoint)
 
     key = _build_key(resolved_checkpoint)
-    runtime, loaded = get_cached_runtime(key)
+    runtime, loaded = get_cached_runtime(key, max_parallelism=env.max_parallelism)
     if loaded:
         logger.info(f"Loaded InferenceRuntime for checkpoint={key.checkpoint}")
+        if env.max_parallelism > 1:
+            logger.info(
+                f"Parallel inference enabled "
+                f"(max_parallelism={env.max_parallelism})"
+            )
     _runtime = runtime
     _runtime_key = key
     return runtime

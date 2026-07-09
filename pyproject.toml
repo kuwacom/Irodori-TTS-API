@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.124.0",
-    "irodori-tts @ git+https://github.com/kuwacom/Irodori-TTS-Optimiz",
+    "irodori-tts @ git+https://github.com/kuwacom/Irodori-TTS-Optimiz@main",
     "pydantic-settings>=2.12.0",
     "python-multipart>=0.0.20",
     "rich>=14.0.0",
