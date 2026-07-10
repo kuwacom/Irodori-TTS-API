@@ -161,6 +161,7 @@ CODEC_DEVICE=cpu
 | メソッド | パス | 説明 |
 |---|---|---|
 | `POST` | `/v1/synthesize` | 音声合成 |
+| `GET` | `/v1/synthesize` | 音声合成（クエリベース・簡易） |
 
 ---
 
@@ -464,6 +465,37 @@ curl -X POST http://localhost:8000/v1/synthesize \
 ```
 
 `id` はリクエストごとに UUID で生成され、ログにも `req_id` として出力されます。すべてのレスポンスヘッダに `X-Request-Id` として付与されます。
+
+---
+
+### GET /v1/synthesize
+
+音声合成を実行する（クエリベース・簡易）。POST /v1/synthesize と同じ合成エンジンを使うが、主要パラメータのみをクエリパラメータで受け付ける。完全制御が必要な場合は POST を使用すること。
+
+**クエリパラメーター:**
+
+| パラメーター | 型 | 必須 | デフォルト | 説明 |
+|---|---|---|---|---|
+| `text` | string | ○ | -- | 読み上げ本文 |
+| `speakerId` | string | -- | `null` | 話者ID |
+| `caption` | string | -- | `null` | スタイル指示 |
+| `seed` | int | -- | `null` | 乱数シード |
+| `format` | string | -- | `"wav"` | 出力形式（`wav` / `mp3` / `flac`） |
+| `method` | string | -- | `"buffer"` | 応答方式。`buffer`: 音声を直接返す / `inline`: JSON応答にbase64埋め込み |
+
+無効な値が指定された場合は 422（バリデーションエラー）となる。
+
+**例:**
+
+```http
+GET /v1/synthesize?text=こんにちは&speakerId=a1b2c3d4-...
+```
+
+```bash
+curl "http://localhost:8000/v1/synthesize?text=こんにちは&caption=元気な幼女" --output voice.wav
+```
+
+レスポンス仕様は POST /v1/synthesize の buffer / inline モードに準ずる。
 
 ## ディレクトリ構造
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -307,3 +307,28 @@ class SynthesizeResponse(BaseModel):
     timings: dict[str, Any] = Field(default_factory=dict)
     messages: list[str] = Field(default_factory=list)
     segments: list[SegmentInfo] | None = None
+
+
+class SynthesizeQueryParams(BaseModel):
+    """GET /v1/synthesize のクエリパラメータ
+
+    TikTok TTS API ライクなクエリベースの簡易呼び出し用。
+    主要パラメータのみを受け付け、それ以外はサーバ既定値を使うため、
+    完全制御が必要な場合は POST /v1/synthesize を使用すること。
+    """
+
+    text: str = Field(..., min_length=1, description="読み上げ本文")
+    speakerId: str | None = Field(default=None, description="話者ID")
+    caption: str | None = Field(default=None, description="スタイル指示")
+    seed: int | None = Field(default=None, description="乱数シード")
+    format: Literal["wav", "mp3", "flac"] = Field(
+        default="wav",
+        description="出力形式",
+    )
+    method: Literal["buffer", "inline"] = Field(
+        default="buffer",
+        description=(
+            "応答方式。buffer: 音声データを直接返す / "
+            "inline: JSON 応答に base64 を埋め込む"
+        ),
+    )

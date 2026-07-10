@@ -21,7 +21,10 @@ from src.schemas.synthesize import (
     AudioItem,
     ConditioningInfo,
     ModelInfo,
+    OutputParams,
+    SamplingParams,
     SegmentInfo,
+    SynthesizeQueryParams,
     SynthesizeRequest,
     SynthesizeResponse,
 )
@@ -148,15 +151,11 @@ def _build_common_kwargs(req: SynthesizeRequest) -> tuple[dict, str | None]:
     return common, effective_caption
 
 
-@synthesize_router.post("", response_model=None)
-async def synthesize(
+async def _execute_synthesis(
     req: SynthesizeRequest,
-    request: Request,
-):
-    """音声合成を実行する"""
-    # ミドルウェアで生成したリクエストIDを取得し、レスポンスの id に一貫性を持たせる
-    request_id = getattr(request.state, REQUEST_ID_KEY, "")
-
+    request_id: str,
+) -> Response | SynthesizeResponse:
+    """POST / GET 共通の音声合成処理"""
     # 制限チェック
     if (
         req.duration.seconds is not None
@@ -309,3 +308,36 @@ async def synthesize(
         messages=result.messages,
         segments=segments,
     )
+
+
+@synthesize_router.post("", response_model=None)
+async def synthesize(
+    req: SynthesizeRequest,
+    request: Request,
+):
+    """音声合成を実行する"""
+    # ミドルウェアで生成したリクエストIDを取得し、レスポンスの id に一貫性を持たせる
+    request_id = getattr(request.state, REQUEST_ID_KEY, "")
+    return await _execute_synthesis(req, request_id)
+
+
+@synthesize_router.get("", response_model=None)
+async def synthesize_get(
+    query: SynthesizeQueryParams,
+    request: Request,
+):
+    """音声合成を実行する (GET)
+
+    TikTok TTS API ライクなクエリベースの簡易呼び出し。
+    主要パラメータのみを受け付け、それ以外はサーバ既定値を使う。
+    完全制御が必要な場合は POST /v1/synthesize を使用すること。
+    """
+    request_id = getattr(request.state, REQUEST_ID_KEY, "")
+    req = SynthesizeRequest(
+        text=query.text,
+        speakerId=query.speakerId,
+        caption=query.caption,
+        sampling=SamplingParams(seed=query.seed),
+        output=OutputParams(format=query.format, mode=query.method),
+    )
+    return await _execute_synthesis(req, request_id)
