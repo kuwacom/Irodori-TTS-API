@@ -2,13 +2,17 @@
 # docker compose up でGPU版が起動する
 #
 # CPU版を使う場合: docker compose -f docker-compose.cpu.yml up
+#
+# GHCRイメージを優先。ローカルビルドする場合は:
+#   docker compose build gpu
+#   docker compose up gpu --no-pull
 
 services:
   gpu:
+    image: ghcr.io/kuwacom/irodori-tts-api:gpu
     build:
       context: .
       dockerfile: docker/Dockerfile.gpu
-    image: irodori-tts-api:gpu
     ports:
       - "${PORT:-8000}:8000"
     volumes:
@@ -19,7 +23,7 @@ services:
     environment:
       HOST: "0.0.0.0"
       MODEL_DEVICE: cuda
-      CODEC_DEVICE: cuda
+      CODEC_DEVICE: cpu
     deploy:
       resources:
         reservations:

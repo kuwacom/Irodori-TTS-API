@@ -1,0 +1,82 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "src/**"
+      - "docker/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "docker/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - variant: cpu
+            dockerfile: docker/Dockerfile.cpu
+          - variant: gpu
+            dockerfile: docker/Dockerfile.gpu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            # mainブランチ: variant名のみのタグ (cpu, gpu)
+            type=raw,value=${{ matrix.variant }},enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            # セマンティックバージョンタグ (v1.0.0-cpu, v1.2.3-gpu)
+            type=semver,pattern={{version}}-${{ matrix.variant }}
+            type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant }}
+            # ブランチタグ (main-cpu, feature-x-gpu)
+            type=ref,event=branch,suffix=-${{ matrix.variant }}
+            # SHAタグ (sha-abc1234-cpu)
+            type=sha,suffix=-${{ matrix.variant }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

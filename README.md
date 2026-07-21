@@ -160,7 +160,51 @@ docker-compose.yml      -- GPU版（デフォルト）
 docker-compose.cpu.yml  -- CPU版
 ```
 
-### ビルド
+### イメージ
+
+GHCRからプルしたイメージを優先して使用します。ローカルビルドは明示的な `build` コマンド時のみ行われます。
+
+| イメージ | GHCR |
+|---|---|
+| GPU版 | `ghcr.io/kuwacom/irodori-tts-api:gpu` |
+| CPU版 | `ghcr.io/kuwacom/irodori-tts-api:cpu` |
+
+タグはブランチ名・セマンティックバージョン・コミットSHAに基づいて自動付与されます:
+
+| タグ | 例 | タイミング |
+|---|---|---|
+| `{variant}-latest` | `gpu`, `cpu` | mainプッシュ時 |
+| `{variant}-{branch}` | `gpu-main`, `cpu-main` | ブランチプッシュ時 |
+| `{variant}-v1.0.0` | `gpu-v1.0.0`, `cpu-v1.0.0` | タグプッシュ時 |
+| `{variant}-sha-abc1234` | `gpu-sha-abc1234` | 全プッシュ時 |
+
+### 起動
+
+```bash
+# GPU版（デフォルト）-- GHCRからpullして起動
+docker compose up
+
+# CPU版
+docker compose -f docker-compose.cpu.yml up
+```
+
+GPU版は [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) が必要です。
+
+### ローカルビルド
+
+GHCRイメージを使わずローカルでビルドする場合:
+
+```bash
+# GPU版
+docker compose build gpu
+docker compose up gpu --no-pull
+
+# CPU版
+docker compose -f docker-compose.cpu.yml build cpu
+docker compose -f docker-compose.cpu.yml up cpu --no-pull
+```
+
+または `docker build` を直接:
 
 ```bash
 # CPU版
@@ -170,18 +214,6 @@ docker build -f docker/Dockerfile.cpu -t irodori-tts-api:cpu .
 docker build -f docker/Dockerfile.gpu -t irodori-tts-api:gpu .
 ```
 
-### 起動
-
-```bash
-# GPU版（デフォルト）
-docker compose up
-
-# CPU版
-docker compose -f docker-compose.cpu.yml up
-```
-
-GPU版は [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) が必要です。
-
 ### ボリュームマウント
 
 `models/` と `data/` はホストディレクトリをバインドマウントします。初回起動時はモデルがHuggingFace Hubから自動ダウンロードされます。
@@ -190,7 +222,7 @@ GPU版は [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-na
 docker run --gpus all -p 8000:8000 \
   -v ./models:/app/models \
   -v ./data:/app/data \
-  irodori-tts-api:gpu
+  ghcr.io/kuwacom/irodori-tts-api:gpu
 ```
 
 ### 環境変数の優先順位

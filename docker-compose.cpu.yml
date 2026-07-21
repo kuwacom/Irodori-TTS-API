@@ -1,12 +1,16 @@
 # Irodori TTS API - CPU版
 # docker compose -f docker-compose.cpu.yml up
+#
+# GHCRイメージを優先。ローカルビルドする場合は:
+#   docker compose -f docker-compose.cpu.yml build cpu
+#   docker compose -f docker-compose.cpu.yml up cpu --no-pull
 
 services:
   cpu:
+    image: ghcr.io/kuwacom/irodori-tts-api:cpu
     build:
       context: .
       dockerfile: docker/Dockerfile.cpu
-    image: irodori-tts-api:cpu
     ports:
       - "${PORT:-8000}:8000"
     volumes:
@@ -20,7 +24,13 @@ services:
       CODEC_DEVICE: cpu
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')",
+        ]
       interval: 30s
       timeout: 5s
       start_period: 120s
