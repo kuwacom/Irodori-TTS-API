@@ -1,0 +1,61 @@
+# Irodori TTS API - GPU版 (CUDA 12.8 + cuDNN)
+# docker build -f docker/Dockerfile.gpu -t irodori-tts-api:gpu .
+# docker compose up
+
+# -- builder --
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04 AS builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3.12 python3.12-dev python3.12-venv \
+    git cmake pkg-config protobuf-compiler libprotobuf-dev && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+# current-cuda グループ込み（cu128版PyTorchが自動選択される）
+RUN uv sync --frozen --no-dev && \
+    rm -rf /root/.cache/uv
+
+# -- runner --
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04 AS runner
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3.12 libsndfile1 && \
+    ln -sf /usr/bin/python3.12 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
+# 非 root で実行（UID固定しない）
+RUN groupadd --system appgroup && \
+    useradd --system --gid appgroup --shell /bin/bash --create-home appuser
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+COPY src/ src/
+
+RUN mkdir -p models data && chown appuser:appgroup models data
+
+USER appuser
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOST=0.0.0.0 \
+    PORT=8000 \
+    MODEL_DEVICE=cuda \
+    CODEC_DEVICE=cpu \
+    MODELS_DIR=models \
+    DATA_DIR=data
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
+
+ENTRYPOINT [".venv/bin/python", "-m", "src.main"]

@@ -1,0 +1,42 @@
+# Irodori TTS API - GPU版 (デフォルト)
+# docker compose up でGPU版が起動する
+#
+# CPU版を使う場合: docker compose -f docker-compose.cpu.yml up
+
+services:
+  gpu:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gpu
+    image: irodori-tts-api:gpu
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      HOST: "0.0.0.0"
+      MODEL_DEVICE: cuda
+      CODEC_DEVICE: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3

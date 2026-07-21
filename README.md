@@ -145,6 +145,79 @@ MODEL_DEVICE=cpu
 CODEC_DEVICE=cpu
 ```
 
+## Docker
+
+CPU版・GPU版のDockerイメージで簡単にコンテナ起動できます。
+
+### ファイル構成
+
+```
+docker/
+  Dockerfile.cpu      -- CPU版（PyTorch CPU-only）
+  Dockerfile.gpu      -- GPU版（CUDA 12.8 + cuDNN）
+  .dockerignore
+docker-compose.yml      -- GPU版（デフォルト）
+docker-compose.cpu.yml  -- CPU版
+```
+
+### ビルド
+
+```bash
+# CPU版
+docker build -f docker/Dockerfile.cpu -t irodori-tts-api:cpu .
+
+# GPU版
+docker build -f docker/Dockerfile.gpu -t irodori-tts-api:gpu .
+```
+
+### 起動
+
+```bash
+# GPU版（デフォルト）
+docker compose up
+
+# CPU版
+docker compose -f docker-compose.cpu.yml up
+```
+
+GPU版は [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) が必要です。
+
+### ボリュームマウント
+
+`models/` と `data/` はホストディレクトリをバインドマウントします。初回起動時はモデルがHuggingFace Hubから自動ダウンロードされます。
+
+```bash
+docker run --gpus all -p 8000:8000 \
+  -v ./models:/app/models \
+  -v ./data:/app/data \
+  irodori-tts-api:gpu
+```
+
+### 環境変数の優先順位
+
+Docker Composeでは以下の優先順位で環境変数が決まります（上にあるほど強い）:
+
+| 優先度 | ソース | 備考 |
+|---|---|---|
+| 1 | `docker compose run -e VAR=val` | 実行時の -e が最強 |
+| 2 | `environment:` ブロック | composeファイル内の静的定義 |
+| 3 | `env_file:` | コンテナに渡されるファイル |
+| 4 | Dockerfileの `ENV` | イメージに焼き込まれた値 |
+
+`HOST` / `MODEL_DEVICE` / `CODEC_DEVICE` は `environment:` で強制されるため、`.env` の値より優先されます。これは意図的な設計です（`HOST=0.0.0.0` はDockerで必須、デバイス設定はイメージ種別に固定すべきため）。
+
+それ以外の変数（`PORT`, `LOG_LEVEL`, `MAX_PARALLELISM` 等）は `.env` の値がそのままコンテナに渡ります。
+
+### ヘルスチェック
+
+コンテナには `/openapi.json` へのGETリクエストでヘルスチェックが設定されています。起動完了（モデルのDL・初期化）まで `start_period: 120s` の間隔があります。
+
+```bash
+# 手動確認
+docker exec <container> python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"
+```
+
+
 ## エンドポイント
 
 ### 話者管理

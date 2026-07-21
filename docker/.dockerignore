@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Local environment
+.venv/
+.uv-cache/
+.uv-python/
+
+# Tools
+.pytest_cache/
+.ruff_cache/
+pytest-cache-files-*
+
+# Secrets
+.env
+
+# Runtime data (ボリュームマウント前提)
+data/
+
+# Model cache (起動時DLまたはボリュームマウント)
+models/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker (自己参照防止)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
