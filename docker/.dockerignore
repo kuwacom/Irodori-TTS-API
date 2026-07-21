@@ -21,10 +21,8 @@ pytest-cache-files-*
 # Secrets
 .env
 
-# Runtime data (ボリュームマウント前提)
+# Runtime data
 data/
-
-# Model cache (起動時DLまたはボリュームマウント)
 models/
 
 # IDE
@@ -33,7 +31,15 @@ models/
 *.swp
 *.swo
 
-# Docker (自己参照防止)
+# CI/CD
+.github/
+
+# Docker自己参照防止
 Dockerfile*
 docker-compose*.yml
 .dockerignore
+
+# Docs
+README.md
+LICENSE
+AGENTS.md

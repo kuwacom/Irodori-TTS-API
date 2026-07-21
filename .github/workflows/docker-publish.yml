@@ -60,23 +60,19 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
-            # mainブランチ: variant名のみのタグ (cpu, gpu)
             type=raw,value=${{ matrix.variant }},enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
-            # セマンティックバージョンタグ (v1.0.0-cpu, v1.2.3-gpu)
             type=semver,pattern={{version}}-${{ matrix.variant }}
             type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant }}
-            # ブランチタグ (main-cpu, feature-x-gpu)
             type=ref,event=branch,suffix=-${{ matrix.variant }}
-            # SHAタグ (sha-abc1234-cpu)
             type=sha,suffix=-${{ matrix.variant }}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
